@@ -12,6 +12,7 @@ Included files:
 - `peon/PeonReady1.ogg`
 - `peon/PeonYes3.ogg`
 - `peon/PeonWhat3.ogg`
+- `peon/PeonWhat4.ogg`
 - `peon/PeonBuildingComplete1.ogg`
 - `peasant/PeasantReady1.ogg`
 - `peasant/PeasantYes3.ogg`

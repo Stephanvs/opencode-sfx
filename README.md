@@ -23,7 +23,8 @@ Add it to your OpenCode config, OpenCode will download/manage it for you:
 |---|---|
 | plugin load | `PeonReady1.ogg` |
 | `tui.command.execute` (`prompt.submit`) | `PeonYes3.ogg` |
-| `permission.ask` and `session.error` | `PeonWhat3.ogg` |
+| `permission.updated` (and `permission.ask`) | `PeonWhat4.ogg` |
+| `session.error` | `PeonWhat3.ogg` |
 | `session.status` (`status.type === "idle"`) | `PeonBuildingComplete1.ogg` |
 
 ## Configuration
@@ -52,12 +53,14 @@ Full example:
     "sessionStart": true,
     "promptSubmit": true,
     "notification": true,
+    "permission": true,
     "stop": true
   },
   "sounds": {
     "sessionStart": "/absolute/path/to/start.ogg",
     "promptSubmit": "custom/prompt.ogg",
     "notification": "/absolute/path/to/notification.ogg",
+    "permission": "/absolute/path/to/permission.ogg",
     "stop": "/absolute/path/to/stop.ogg"
   }
 }

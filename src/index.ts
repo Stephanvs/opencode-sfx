@@ -5,7 +5,12 @@ import { homedir } from "node:os"
 import { dirname, isAbsolute, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
-type SoundEvent = "sessionStart" | "promptSubmit" | "notification" | "stop"
+type SoundEvent =
+  | "sessionStart"
+  | "promptSubmit"
+  | "notification"
+  | "permission"
+  | "stop"
 type VoicePack = "peon" | "peasant"
 
 interface SfxConfig {
@@ -38,6 +43,7 @@ const SOUND_EVENTS: SoundEvent[] = [
   "sessionStart",
   "promptSubmit",
   "notification",
+  "permission",
   "stop",
 ]
 
@@ -45,6 +51,7 @@ const DEFAULT_EVENTS: Record<SoundEvent, boolean> = {
   sessionStart: true,
   promptSubmit: true,
   notification: true,
+  permission: true,
   stop: true,
 }
 
@@ -66,12 +73,14 @@ const BUNDLED_SOUNDS: Record<VoicePack, Record<SoundEvent, string>> = {
     sessionStart: bundledSoundPath("peon/PeonReady1.ogg"),
     promptSubmit: bundledSoundPath("peon/PeonYes3.ogg"),
     notification: bundledSoundPath("peon/PeonWhat3.ogg"),
+    permission: bundledSoundPath("peon/PeonWhat4.ogg"),
     stop: bundledSoundPath("peon/PeonBuildingComplete1.ogg"),
   },
   peasant: {
     sessionStart: bundledSoundPath("peasant/PeasantReady1.ogg"),
     promptSubmit: bundledSoundPath("peasant/PeasantYes3.ogg"),
     notification: bundledSoundPath("peasant/PeasantWhat3.ogg"),
+    permission: bundledSoundPath("peasant/PeasantWhat3.ogg"),
     stop: bundledSoundPath("peasant/PeasantYes4.ogg"),
   },
 }
@@ -145,6 +154,10 @@ function loadConfig(): LoadConfigResult {
           typeof rawEvents.notification === "boolean"
             ? rawEvents.notification
             : DEFAULT_EVENTS.notification,
+        permission:
+          typeof rawEvents.permission === "boolean"
+            ? rawEvents.permission
+            : DEFAULT_EVENTS.permission,
         stop:
           typeof rawEvents.stop === "boolean"
             ? rawEvents.stop
@@ -154,6 +167,7 @@ function loadConfig(): LoadConfigResult {
         sessionStart: optionalString(rawSounds.sessionStart),
         promptSubmit: optionalString(rawSounds.promptSubmit),
         notification: optionalString(rawSounds.notification),
+        permission: optionalString(rawSounds.permission),
         stop: optionalString(rawSounds.stop),
       },
     }
@@ -186,6 +200,7 @@ function resolveSoundMap(config: SfxConfig): Record<SoundEvent, string> {
     sessionStart: config.sounds.sessionStart ?? bundled.sessionStart,
     promptSubmit: config.sounds.promptSubmit ?? bundled.promptSubmit,
     notification: config.sounds.notification ?? bundled.notification,
+    permission: config.sounds.permission ?? bundled.permission,
     stop: config.sounds.stop ?? bundled.stop,
   }
 }
@@ -352,10 +367,15 @@ export const WarcraftSfxPlugin: Plugin = async ({ client }) => {
 
       if (event.type === "session.error") {
         play("notification")
+        return
+      }
+
+      if (event.type === "permission.updated") {
+        play("permission")
       }
     },
     "permission.ask": async () => {
-      play("notification")
+      play("permission")
     },
   }
 }
