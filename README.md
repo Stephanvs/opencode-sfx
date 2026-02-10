@@ -19,14 +19,12 @@ Add it to your OpenCode config, OpenCode will download/manage it for you:
 
 ## Default Event Mapping
 
-This maps closely to the Claude hook setup you shared:
-
-| OpenCode event | Claude analog | Default sound (`peon`) |
+| OpenCode event | Default sound (`peon`) |
 |---|---|---|
-| plugin load | `SessionStart` | `PeonReady1.ogg` |
-| `tui.command.execute` (`prompt.submit`) | `UserPromptSubmit` | `PeonYes3.ogg` |
-| `permission.ask` and `session.error` | `Notification` | `PeonWhat3.ogg` |
-| `session.idle` | `Stop` | `PeonBuildingComplete1.ogg` |
+| plugin load |  `PeonReady1.ogg` |
+| `tui.command.execute` (`prompt.submit`) | `PeonYes3.ogg` |
+| `permission.ask` and `session.error` | `PeonWhat3.ogg` |
+| `session.idle` | `PeonBuildingComplete1.ogg` |
 
 ## Configuration
 
