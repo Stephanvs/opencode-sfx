@@ -1,0 +1,51 @@
+{
+  "name": "opencode-sfx",
+  "version": "0.1.0",
+  "description": "OpenCode plugin that plays Warcraft-style sound effects for session events",
+  "author": "stephanvs",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stephanvs/opencode-sfx.git"
+  },
+  "homepage": "https://github.com/stephanvs/opencode-sfx#readme",
+  "bugs": {
+    "url": "https://github.com/stephanvs/opencode-sfx/issues"
+  },
+  "files": [
+    "dist",
+    "assets",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "warcraft",
+    "sound-effects",
+    "sfx",
+    "notifications"
+  ],
+  "devDependencies": {
+    "@opencode-ai/plugin": "^1.0.224",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=1.0.0"
+  }
+}
