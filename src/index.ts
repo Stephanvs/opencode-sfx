@@ -271,6 +271,7 @@ export const WarcraftSfxPlugin: Plugin = async ({ client }) => {
   const { player, warning } = resolvePlayer(config)
   const sounds = resolveSoundMap(config)
   const missingSoundWarnings = new Set<SoundEvent>()
+  const activeSessions = new Set<string>()
 
   const log = async (level: "warn" | "error", message: string) => {
     try {
@@ -333,8 +334,19 @@ export const WarcraftSfxPlugin: Plugin = async ({ client }) => {
         return
       }
 
-      if (event.type === "session.idle") {
-        play("stop")
+      if (event.type === "session.status") {
+        const { sessionID, status } = event.properties
+
+        if (status.type === "idle") {
+          if (activeSessions.has(sessionID)) {
+            activeSessions.delete(sessionID)
+            play("stop")
+          }
+
+          return
+        }
+
+        activeSessions.add(sessionID)
         return
       }
 

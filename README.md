@@ -24,7 +24,7 @@ Add it to your OpenCode config, OpenCode will download/manage it for you:
 | plugin load | `PeonReady1.ogg` |
 | `tui.command.execute` (`prompt.submit`) | `PeonYes3.ogg` |
 | `permission.ask` and `session.error` | `PeonWhat3.ogg` |
-| `session.idle` | `PeonBuildingComplete1.ogg` |
+| `session.status` (`status.type === "idle"`) | `PeonBuildingComplete1.ogg` |
 
 ## Configuration
 

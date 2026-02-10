@@ -1,6 +1,6 @@
 {
   "name": "opencode-sfx",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "description": "OpenCode plugin that plays Warcraft-style sound effects for session events",
   "author": "stephanvs",
   "license": "MIT",
