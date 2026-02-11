@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url"
 
 type SoundEvent =
   | "sessionStart"
+  | "sessionCreated"
   | "promptSubmit"
   | "notification"
   | "permission"
@@ -41,6 +42,7 @@ const SERVICE_NAME = "opencode-sfx"
 const CONFIG_PATH = join(homedir(), ".config", "opencode", "opencode-sfx.json")
 const SOUND_EVENTS: SoundEvent[] = [
   "sessionStart",
+  "sessionCreated",
   "promptSubmit",
   "notification",
   "permission",
@@ -49,6 +51,7 @@ const SOUND_EVENTS: SoundEvent[] = [
 
 const DEFAULT_EVENTS: Record<SoundEvent, boolean> = {
   sessionStart: true,
+  sessionCreated: true,
   promptSubmit: true,
   notification: true,
   permission: true,
@@ -70,7 +73,8 @@ function bundledSoundPath(relativePath: string): string {
 
 const BUNDLED_SOUNDS: Record<VoicePack, Record<SoundEvent, string>> = {
   peon: {
-    sessionStart: bundledSoundPath("peon/PeonReady1.ogg"),
+    sessionStart: bundledSoundPath("peon/PeonYes4.ogg"),
+    sessionCreated: bundledSoundPath("peon/PeonYes4.ogg"),
     promptSubmit: bundledSoundPath("peon/PeonYes3.ogg"),
     notification: bundledSoundPath("peon/PeonWhat3.ogg"),
     permission: bundledSoundPath("peon/PeonWhat4.ogg"),
@@ -78,6 +82,7 @@ const BUNDLED_SOUNDS: Record<VoicePack, Record<SoundEvent, string>> = {
   },
   peasant: {
     sessionStart: bundledSoundPath("peasant/PeasantReady1.ogg"),
+    sessionCreated: bundledSoundPath("peasant/PeasantReady1.ogg"),
     promptSubmit: bundledSoundPath("peasant/PeasantYes3.ogg"),
     notification: bundledSoundPath("peasant/PeasantWhat3.ogg"),
     permission: bundledSoundPath("peasant/PeasantWhat3.ogg"),
@@ -146,6 +151,10 @@ function loadConfig(): LoadConfigResult {
           typeof rawEvents.sessionStart === "boolean"
             ? rawEvents.sessionStart
             : DEFAULT_EVENTS.sessionStart,
+        sessionCreated:
+          typeof rawEvents.sessionCreated === "boolean"
+            ? rawEvents.sessionCreated
+            : DEFAULT_EVENTS.sessionCreated,
         promptSubmit:
           typeof rawEvents.promptSubmit === "boolean"
             ? rawEvents.promptSubmit
@@ -165,6 +174,7 @@ function loadConfig(): LoadConfigResult {
       },
       sounds: {
         sessionStart: optionalString(rawSounds.sessionStart),
+        sessionCreated: optionalString(rawSounds.sessionCreated),
         promptSubmit: optionalString(rawSounds.promptSubmit),
         notification: optionalString(rawSounds.notification),
         permission: optionalString(rawSounds.permission),
@@ -198,6 +208,7 @@ function resolveSoundMap(config: SfxConfig): Record<SoundEvent, string> {
 
   return {
     sessionStart: config.sounds.sessionStart ?? bundled.sessionStart,
+    sessionCreated: config.sounds.sessionCreated ?? bundled.sessionCreated,
     promptSubmit: config.sounds.promptSubmit ?? bundled.promptSubmit,
     notification: config.sounds.notification ?? bundled.notification,
     permission: config.sounds.permission ?? bundled.permission,
@@ -346,6 +357,11 @@ export const WarcraftSfxPlugin: Plugin = async ({ client }) => {
         event.properties.command === "prompt.submit"
       ) {
         play("promptSubmit")
+        return
+      }
+
+      if (event.type === "session.created") {
+        play("sessionCreated")
         return
       }
 

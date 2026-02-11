@@ -10,7 +10,9 @@ Source pages:
 Included files:
 
 - `peon/PeonReady1.ogg`
+- `peon/PeonYes1.ogg`
 - `peon/PeonYes3.ogg`
+- `peon/PeonYes4.ogg`
 - `peon/PeonWhat3.ogg`
 - `peon/PeonWhat4.ogg`
 - `peon/PeonBuildingComplete1.ogg`

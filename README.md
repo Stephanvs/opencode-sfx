@@ -21,7 +21,8 @@ Add it to your OpenCode config, OpenCode will download/manage it for you:
 
 | OpenCode event | Default sound (`peon`) |
 |---|---|
-| plugin load | `PeonReady1.ogg` |
+| plugin load | `PeonYes4.ogg` |
+| `session.created` | `PeonYes4.ogg` |
 | `tui.command.execute` (`prompt.submit`) | `PeonYes3.ogg` |
 | `permission.updated` (and `permission.ask`) | `PeonWhat4.ogg` |
 | `session.error` | `PeonWhat3.ogg` |
@@ -51,6 +52,7 @@ Full example:
   "playerArgs": [],
   "events": {
     "sessionStart": true,
+    "sessionCreated": true,
     "promptSubmit": true,
     "notification": true,
     "permission": true,
@@ -58,6 +60,7 @@ Full example:
   },
   "sounds": {
     "sessionStart": "/absolute/path/to/start.ogg",
+    "sessionCreated": "/absolute/path/to/session-created.ogg",
     "promptSubmit": "custom/prompt.ogg",
     "notification": "/absolute/path/to/notification.ogg",
     "permission": "/absolute/path/to/permission.ogg",
