@@ -1,6 +1,6 @@
 # Bundled Audio Assets
 
-This directory contains Warcraft sound clips used by `opencode-sfx`.
+This directory contains Warcraft sound clips used by `opencode-sfx`. On first bootstrap, the plugin copies this entire `assets/` tree into the user sound root.
 
 Source pages:
 

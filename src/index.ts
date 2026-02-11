@@ -1,8 +1,16 @@
 import type { Plugin } from "@opencode-ai/plugin"
 import { spawn, spawnSync } from "node:child_process"
-import { existsSync, readFileSync } from "node:fs"
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  type Dirent,
+} from "node:fs"
 import { homedir } from "node:os"
-import { dirname, isAbsolute, join, resolve } from "node:path"
+import { dirname, extname, isAbsolute, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
 type SoundEvent =
@@ -12,15 +20,14 @@ type SoundEvent =
   | "notification"
   | "permission"
   | "stop"
-type VoicePack = "peon" | "peasant"
 
 interface SfxConfig {
   enabled: boolean
-  voicePack: VoicePack
   playerCommand: string | null
   playerArgs: string[]
   events: Record<SoundEvent, boolean>
-  sounds: Partial<Record<SoundEvent, string>>
+  soundRoot: string
+  eventFolders: Partial<Record<SoundEvent, string>>
 }
 
 interface LoadConfigResult {
@@ -39,7 +46,9 @@ interface ResolvePlayerResult {
 }
 
 const SERVICE_NAME = "opencode-sfx"
-const CONFIG_PATH = join(homedir(), ".config", "opencode", "opencode-sfx.json")
+const CONFIG_DIR = join(homedir(), ".config", "opencode")
+const CONFIG_PATH = join(CONFIG_DIR, "opencode-sfx.json")
+const DEFAULT_SOUND_ROOT = join(CONFIG_DIR, "opencode-sfx", "sounds")
 const SOUND_EVENTS: SoundEvent[] = [
   "sessionStart",
   "sessionCreated",
@@ -48,6 +57,8 @@ const SOUND_EVENTS: SoundEvent[] = [
   "permission",
   "stop",
 ]
+const SUPPORTED_AUDIO_EXTENSIONS = new Set([".ogg", ".wav", ".mp3"])
+const BUNDLED_ASSETS_ROOT = fileURLToPath(new URL("../assets", import.meta.url))
 
 const DEFAULT_EVENTS: Record<SoundEvent, boolean> = {
   sessionStart: true,
@@ -60,34 +71,20 @@ const DEFAULT_EVENTS: Record<SoundEvent, boolean> = {
 
 const DEFAULT_CONFIG: SfxConfig = {
   enabled: true,
-  voicePack: "peon",
   playerCommand: null,
   playerArgs: [],
   events: { ...DEFAULT_EVENTS },
-  sounds: {},
+  soundRoot: DEFAULT_SOUND_ROOT,
+  eventFolders: {},
 }
 
-function bundledSoundPath(relativePath: string): string {
-  return fileURLToPath(new URL(`../assets/${relativePath}`, import.meta.url))
-}
-
-const BUNDLED_SOUNDS: Record<VoicePack, Record<SoundEvent, string>> = {
-  peon: {
-    sessionStart: bundledSoundPath("peon/PeonYes4.ogg"),
-    sessionCreated: bundledSoundPath("peon/PeonYes4.ogg"),
-    promptSubmit: bundledSoundPath("peon/PeonYes3.ogg"),
-    notification: bundledSoundPath("peon/PeonWhat3.ogg"),
-    permission: bundledSoundPath("peon/PeonWhat4.ogg"),
-    stop: bundledSoundPath("peon/PeonBuildingComplete1.ogg"),
-  },
-  peasant: {
-    sessionStart: bundledSoundPath("peasant/PeasantReady1.ogg"),
-    sessionCreated: bundledSoundPath("peasant/PeasantReady1.ogg"),
-    promptSubmit: bundledSoundPath("peasant/PeasantYes3.ogg"),
-    notification: bundledSoundPath("peasant/PeasantWhat3.ogg"),
-    permission: bundledSoundPath("peasant/PeasantWhat3.ogg"),
-    stop: bundledSoundPath("peasant/PeasantYes4.ogg"),
-  },
+function defaultConfig(): SfxConfig {
+  return {
+    ...DEFAULT_CONFIG,
+    playerArgs: [],
+    events: { ...DEFAULT_EVENTS },
+    eventFolders: {},
+  }
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -111,14 +108,21 @@ function normalizeConfiguredPath(pathValue: string): string {
   return resolve(dirname(CONFIG_PATH), pathValue)
 }
 
+function normalizeConfiguredFolder(
+  soundRoot: string,
+  folderValue: string
+): string {
+  if (isAbsolute(folderValue)) {
+    return folderValue
+  }
+
+  return resolve(soundRoot, folderValue)
+}
+
 function loadConfig(): LoadConfigResult {
   if (!existsSync(CONFIG_PATH)) {
     return {
-      config: {
-        ...DEFAULT_CONFIG,
-        events: { ...DEFAULT_EVENTS },
-        sounds: {},
-      },
+      config: defaultConfig(),
       warnings: [],
     }
   }
@@ -132,14 +136,16 @@ function loadConfig(): LoadConfigResult {
     }
 
     const rawEvents = isObject(parsed.events) ? parsed.events : {}
-    const rawSounds = isObject(parsed.sounds) ? parsed.sounds : {}
+    const rawEventFolders = isObject(parsed.eventFolders)
+      ? parsed.eventFolders
+      : {}
+    const configuredSoundRoot = optionalString(parsed.soundRoot)
 
     const config: SfxConfig = {
       enabled:
         typeof parsed.enabled === "boolean"
           ? parsed.enabled
           : DEFAULT_CONFIG.enabled,
-      voicePack: parsed.voicePack === "peasant" ? "peasant" : "peon",
       playerCommand: optionalString(parsed.playerCommand) ?? null,
       playerArgs: Array.isArray(parsed.playerArgs)
         ? parsed.playerArgs.filter(
@@ -172,20 +178,26 @@ function loadConfig(): LoadConfigResult {
             ? rawEvents.stop
             : DEFAULT_EVENTS.stop,
       },
-      sounds: {
-        sessionStart: optionalString(rawSounds.sessionStart),
-        sessionCreated: optionalString(rawSounds.sessionCreated),
-        promptSubmit: optionalString(rawSounds.promptSubmit),
-        notification: optionalString(rawSounds.notification),
-        permission: optionalString(rawSounds.permission),
-        stop: optionalString(rawSounds.stop),
+      soundRoot: configuredSoundRoot
+        ? normalizeConfiguredPath(configuredSoundRoot)
+        : DEFAULT_CONFIG.soundRoot,
+      eventFolders: {
+        sessionStart: optionalString(rawEventFolders.sessionStart),
+        sessionCreated: optionalString(rawEventFolders.sessionCreated),
+        promptSubmit: optionalString(rawEventFolders.promptSubmit),
+        notification: optionalString(rawEventFolders.notification),
+        permission: optionalString(rawEventFolders.permission),
+        stop: optionalString(rawEventFolders.stop),
       },
     }
 
     for (const eventName of SOUND_EVENTS) {
-      const configuredPath = config.sounds[eventName]
-      if (configuredPath) {
-        config.sounds[eventName] = normalizeConfiguredPath(configuredPath)
+      const configuredFolder = config.eventFolders[eventName]
+      if (configuredFolder) {
+        config.eventFolders[eventName] = normalizeConfiguredFolder(
+          config.soundRoot,
+          configuredFolder
+        )
       }
     }
 
@@ -193,27 +205,240 @@ function loadConfig(): LoadConfigResult {
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown error"
     return {
-      config: {
-        ...DEFAULT_CONFIG,
-        events: { ...DEFAULT_EVENTS },
-        sounds: {},
-      },
+      config: defaultConfig(),
       warnings: [`Failed to parse ${CONFIG_PATH}: ${message}`],
     }
   }
 }
 
-function resolveSoundMap(config: SfxConfig): Record<SoundEvent, string> {
-  const bundled = BUNDLED_SOUNDS[config.voicePack]
-
+function resolveEventFolders(config: SfxConfig): Record<SoundEvent, string> {
   return {
-    sessionStart: config.sounds.sessionStart ?? bundled.sessionStart,
-    sessionCreated: config.sounds.sessionCreated ?? bundled.sessionCreated,
-    promptSubmit: config.sounds.promptSubmit ?? bundled.promptSubmit,
-    notification: config.sounds.notification ?? bundled.notification,
-    permission: config.sounds.permission ?? bundled.permission,
-    stop: config.sounds.stop ?? bundled.stop,
+    sessionStart:
+      config.eventFolders.sessionStart ?? join(config.soundRoot, "sessionStart"),
+    sessionCreated:
+      config.eventFolders.sessionCreated ??
+      join(config.soundRoot, "sessionCreated"),
+    promptSubmit:
+      config.eventFolders.promptSubmit ?? join(config.soundRoot, "promptSubmit"),
+    notification:
+      config.eventFolders.notification ?? join(config.soundRoot, "notification"),
+    permission:
+      config.eventFolders.permission ?? join(config.soundRoot, "permission"),
+    stop: config.eventFolders.stop ?? join(config.soundRoot, "stop"),
   }
+}
+
+function ensureDirectory(pathValue: string, label: string): string | null {
+  if (existsSync(pathValue)) {
+    try {
+      if (statSync(pathValue).isDirectory()) {
+        return null
+      }
+      return `${label} exists but is not a directory: ${pathValue}`
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "unknown error"
+      return `Failed to inspect ${label.toLowerCase()} at ${pathValue}: ${message}`
+    }
+  }
+
+  try {
+    mkdirSync(pathValue, { recursive: true })
+    return null
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown error"
+    return `Failed to create ${label.toLowerCase()} at ${pathValue}: ${message}`
+  }
+}
+
+function bootstrapSoundFolders(
+  soundRoot: string,
+  eventFolders: Record<SoundEvent, string>
+): string[] {
+  const warnings: string[] = []
+  const rootExistsAtStartup = existsSync(soundRoot)
+
+  const rootWarning = ensureDirectory(soundRoot, "sound root")
+  if (rootWarning) {
+    warnings.push(rootWarning)
+  }
+
+  for (const eventName of SOUND_EVENTS) {
+    const folderWarning = ensureDirectory(
+      eventFolders[eventName],
+      `sound folder for "${eventName}"`
+    )
+
+    if (folderWarning) {
+      warnings.push(folderWarning)
+    }
+  }
+
+  if (!rootExistsAtStartup && !rootWarning) {
+    warnings.push(...seedBundledAssetsTree(soundRoot))
+  }
+
+  return warnings
+}
+
+function seedBundledAssetsTree(soundRoot: string): string[] {
+  const warnings: string[] = []
+
+  if (resolve(soundRoot) === resolve(BUNDLED_ASSETS_ROOT)) {
+    return warnings
+  }
+
+  if (!existsSync(BUNDLED_ASSETS_ROOT)) {
+    warnings.push(`Bundled assets root not found: ${BUNDLED_ASSETS_ROOT}`)
+    return warnings
+  }
+
+  try {
+    if (!statSync(BUNDLED_ASSETS_ROOT).isDirectory()) {
+      warnings.push(`Bundled assets root is not a directory: ${BUNDLED_ASSETS_ROOT}`)
+      return warnings
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown error"
+    warnings.push(`Failed to inspect bundled assets root ${BUNDLED_ASSETS_ROOT}: ${message}`)
+    return warnings
+  }
+
+  copyDirectoryTree(BUNDLED_ASSETS_ROOT, soundRoot, warnings)
+  return warnings
+}
+
+function copyDirectoryTree(
+  sourceDir: string,
+  destinationDir: string,
+  warnings: string[]
+): void {
+  let entries: Dirent<string>[]
+
+  try {
+    entries = readdirSync(sourceDir, { withFileTypes: true })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown error"
+    warnings.push(`Failed to read bundled assets directory ${sourceDir}: ${message}`)
+    return
+  }
+
+  for (const entry of entries) {
+    const sourcePath = join(sourceDir, entry.name)
+    const destinationPath = join(destinationDir, entry.name)
+
+    if (entry.isDirectory()) {
+      const directoryWarning = ensureDirectory(
+        destinationPath,
+        `destination directory "${destinationPath}"`
+      )
+
+      if (directoryWarning) {
+        warnings.push(directoryWarning)
+        continue
+      }
+
+      copyDirectoryTree(sourcePath, destinationPath, warnings)
+      continue
+    }
+
+    if (!entry.isFile()) {
+      continue
+    }
+
+    if (existsSync(destinationPath)) {
+      continue
+    }
+
+    try {
+      copyFileSync(sourcePath, destinationPath)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "unknown error"
+      warnings.push(
+        `Failed to copy bundled file ${sourcePath} to ${destinationPath}: ${message}`
+      )
+    }
+  }
+}
+
+function readSoundFolder(folderPath: string): string[] {
+  let entries: Dirent<string>[]
+
+  try {
+    entries = readdirSync(folderPath, { withFileTypes: true })
+  } catch {
+    return []
+  }
+
+  const soundFiles: string[] = []
+
+  for (const entry of entries) {
+    if (!entry.isFile() || entry.name.startsWith(".")) {
+      continue
+    }
+
+    if (!SUPPORTED_AUDIO_EXTENSIONS.has(extname(entry.name).toLowerCase())) {
+      continue
+    }
+
+    soundFiles.push(join(folderPath, entry.name))
+  }
+
+  soundFiles.sort((left, right) => left.localeCompare(right))
+  return soundFiles
+}
+
+function resolveEventSoundSets(
+  eventFolders: Record<SoundEvent, string>
+): Record<SoundEvent, string[]> {
+  return {
+    sessionStart: readSoundFolder(eventFolders.sessionStart),
+    sessionCreated: readSoundFolder(eventFolders.sessionCreated),
+    promptSubmit: readSoundFolder(eventFolders.promptSubmit),
+    notification: readSoundFolder(eventFolders.notification),
+    permission: readSoundFolder(eventFolders.permission),
+    stop: readSoundFolder(eventFolders.stop),
+  }
+}
+
+function pickSoundPath(
+  eventName: SoundEvent,
+  soundSets: Record<SoundEvent, string[]>,
+  lastPlayedIndices: Partial<Record<SoundEvent, number>>
+): string | null {
+  const candidates = soundSets[eventName]
+
+  if (candidates.length === 0) {
+    return null
+  }
+
+  if (candidates.length === 1) {
+    lastPlayedIndices[eventName] = 0
+    return candidates[0]
+  }
+
+  const previousIndex = lastPlayedIndices[eventName]
+  let nextIndex = Math.floor(Math.random() * candidates.length)
+
+  if (previousIndex !== undefined && nextIndex === previousIndex) {
+    nextIndex =
+      (nextIndex + 1 + Math.floor(Math.random() * (candidates.length - 1))) %
+      candidates.length
+  }
+
+  lastPlayedIndices[eventName] = nextIndex
+  return candidates[nextIndex]
+}
+
+function removeMissingSoundPath(
+  eventName: SoundEvent,
+  pathValue: string,
+  soundSets: Record<SoundEvent, string[]>,
+  lastPlayedIndices: Partial<Record<SoundEvent, number>>
+): void {
+  soundSets[eventName] = soundSets[eventName].filter(
+    (candidate) => candidate !== pathValue
+  )
+  delete lastPlayedIndices[eventName]
 }
 
 function isBareCommand(command: string): boolean {
@@ -294,10 +519,13 @@ function resolvePlayer(config: SfxConfig): ResolvePlayerResult {
 
 export const WarcraftSfxPlugin: Plugin = async ({ client }) => {
   const { config, warnings } = loadConfig()
+  const eventFolders = resolveEventFolders(config)
+  const directoryWarnings = bootstrapSoundFolders(config.soundRoot, eventFolders)
+  const soundSets = resolveEventSoundSets(eventFolders)
   const { player, warning } = resolvePlayer(config)
-  const sounds = resolveSoundMap(config)
   const missingSoundWarnings = new Set<SoundEvent>()
   const activeSessions = new Set<string>()
+  const lastPlayedIndices: Partial<Record<SoundEvent, number>> = {}
 
   const log = async (level: "warn" | "error", message: string) => {
     try {
@@ -313,7 +541,7 @@ export const WarcraftSfxPlugin: Plugin = async ({ client }) => {
     }
   }
 
-  for (const entry of warnings) {
+  for (const entry of [...warnings, ...directoryWarnings]) {
     await log("warn", entry)
   }
 
@@ -326,13 +554,23 @@ export const WarcraftSfxPlugin: Plugin = async ({ client }) => {
       return
     }
 
-    const soundPath = sounds[eventName]
+    let soundPath = pickSoundPath(eventName, soundSets, lastPlayedIndices)
 
-    if (!existsSync(soundPath)) {
-      if (!missingSoundWarnings.has(eventName)) {
-        missingSoundWarnings.add(eventName)
-        void log("warn", `Missing sound file for \"${eventName}\": ${soundPath}`)
+    while (soundPath && !existsSync(soundPath)) {
+      removeMissingSoundPath(eventName, soundPath, soundSets, lastPlayedIndices)
+      soundPath = pickSoundPath(eventName, soundSets, lastPlayedIndices)
+    }
+
+    if (!soundPath) {
+      if (missingSoundWarnings.has(eventName)) {
+        return
       }
+
+      missingSoundWarnings.add(eventName)
+      void log(
+        "warn",
+        `No supported sound files found for \"${eventName}\" in ${eventFolders[eventName]}. Add .ogg, .wav, or .mp3 files.`
+      )
       return
     }
 

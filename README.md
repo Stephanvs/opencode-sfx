@@ -1,11 +1,6 @@
 # opencode-sfx
 
-OpenCode plugin that plays Warcraft worker voice lines for key agent moments, inspired by classic RTS feedback sounds.
-
-Bundled voice packs:
-
-- `peon` (Orc worker)
-- `peasant` (Human worker)
+OpenCode plugin that plays your own sound effects for key agent moments.
 
 ## Installation
 
@@ -17,16 +12,34 @@ Add it to your OpenCode config, OpenCode will download/manage it for you:
 }
 ```
 
-## Default Event Mapping
+## Event Folders
 
-| OpenCode event | Default sound (`peon`) |
+Default sound root:
+
+`~/.config/opencode/opencode-sfx/sounds`
+
+On startup, the plugin checks whether this root and each event folder already exists before creating anything new. It never deletes existing files.
+
+If `soundRoot` is missing on first bootstrap, the plugin copies the entire bundled `assets/` tree into `soundRoot` so event folders are prefilled out of the box.
+
+Put one or more clips directly in each event folder (non-recursive):
+
+| OpenCode event | Folder name |
 |---|---|
-| plugin load | `PeonYes4.ogg` |
-| `session.created` | `PeonYes4.ogg` |
-| `tui.command.execute` (`prompt.submit`) | `PeonYes3.ogg` |
-| `permission.updated` (and `permission.ask`) | `PeonWhat4.ogg` |
-| `session.error` | `PeonWhat3.ogg` |
-| `session.status` (`status.type === "idle"`) | `PeonBuildingComplete1.ogg` |
+| plugin load | `sessionStart/` |
+| `session.created` | `sessionCreated/` |
+| `tui.command.execute` (`prompt.submit`) | `promptSubmit/` |
+| `permission.updated` (and `permission.ask`) | `permission/` |
+| `session.error` | `notification/` |
+| `session.status` (`status.type === "idle"`) | `stop/` |
+
+Supported file types:
+
+- `.ogg`
+- `.wav`
+- `.mp3`
+
+When an event fires, one clip is chosen at random from that folder.
 
 ## Configuration
 
@@ -38,7 +51,7 @@ Minimal example:
 
 ```json
 {
-  "voicePack": "peon"
+  "enabled": true
 }
 ```
 
@@ -47,7 +60,7 @@ Full example:
 ```json
 {
   "enabled": true,
-  "voicePack": "peasant",
+  "soundRoot": "opencode-sfx/sounds",
   "playerCommand": "afplay",
   "playerArgs": [],
   "events": {
@@ -58,13 +71,13 @@ Full example:
     "permission": true,
     "stop": true
   },
-  "sounds": {
-    "sessionStart": "/absolute/path/to/start.ogg",
-    "sessionCreated": "/absolute/path/to/session-created.ogg",
-    "promptSubmit": "custom/prompt.ogg",
-    "notification": "/absolute/path/to/notification.ogg",
-    "permission": "/absolute/path/to/permission.ogg",
-    "stop": "/absolute/path/to/stop.ogg"
+  "eventFolders": {
+    "sessionStart": "sessionStart",
+    "sessionCreated": "sessionCreated",
+    "promptSubmit": "promptSubmit",
+    "notification": "notification",
+    "permission": "permission",
+    "stop": "stop"
   }
 }
 ```
@@ -74,12 +87,13 @@ Config notes:
 - If `playerCommand` is omitted, the plugin auto-detects a player:
   - macOS: `afplay`
   - Linux: `paplay`, then `aplay`, then `ffplay`
-- Relative paths in `sounds` are resolved from `~/.config/opencode/`.
-- Any sound not overridden in `sounds` falls back to the selected `voicePack`.
+- Relative `soundRoot` paths are resolved from `~/.config/opencode/`.
+- Relative `eventFolders` paths are resolved from `soundRoot`.
+- Event folder scanning is non-recursive.
 
 ## Asset Source
 
-Bundled clips come from:
+Sample Warcraft clips in `assets/` come from:
 
 - https://www.wowhead.com/sounds/name:peon
 - https://www.wowhead.com/sounds/name:peasant
