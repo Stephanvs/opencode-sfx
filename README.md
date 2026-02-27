@@ -20,7 +20,7 @@ Default sound root:
 
 On startup, the plugin checks whether this root and each event folder already exists before creating anything new. It never deletes existing files.
 
-If `soundRoot` is missing on first bootstrap, the plugin copies the entire bundled `assets/` tree into `soundRoot` so event folders are prefilled out of the box.
+If `soundRoot` is missing on first bootstrap, the plugin copies the entire bundled `assets/` tree into `soundRoot` so event folders are prefilled out of the box. It also seeds bundled assets when all configured event folders are empty.
 
 Put one or more clips directly in each event folder (non-recursive):
 
@@ -61,8 +61,8 @@ Full example:
 {
   "enabled": true,
   "soundRoot": "opencode-sfx/sounds",
-  "playerCommand": "afplay",
-  "playerArgs": [],
+  "playerCommand": "ffplay",
+  "playerArgs": ["-loglevel", "quiet", "-nodisp", "-autoexit"],
   "events": {
     "sessionStart": true,
     "sessionCreated": true,
@@ -85,8 +85,10 @@ Full example:
 Config notes:
 
 - If `playerCommand` is omitted, the plugin auto-detects a player:
-  - macOS: `afplay`
+  - macOS: `afplay`, then `ffplay`
   - Linux: `paplay`, then `aplay`, then `ffplay`
+  - Windows: `ffplay`
+- `playerCommand` should be an executable name/path, and `playerArgs` should list each argument separately.
 - Relative `soundRoot` paths are resolved from `~/.config/opencode/`.
 - Relative `eventFolders` paths are resolved from `soundRoot`.
 - Event folder scanning is non-recursive.

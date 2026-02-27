@@ -256,6 +256,7 @@ function bootstrapSoundFolders(
 ): string[] {
   const warnings: string[] = []
   const rootExistsAtStartup = existsSync(soundRoot)
+  const hadAnySoundsAtStartup = hasAnySoundFiles(eventFolders)
 
   const rootWarning = ensureDirectory(soundRoot, "sound root")
   if (rootWarning) {
@@ -273,7 +274,7 @@ function bootstrapSoundFolders(
     }
   }
 
-  if (!rootExistsAtStartup && !rootWarning) {
+  if (!rootWarning && (!rootExistsAtStartup || !hadAnySoundsAtStartup)) {
     warnings.push(...seedBundledAssetsTree(soundRoot))
   }
 
@@ -387,6 +388,12 @@ function readSoundFolder(folderPath: string): string[] {
   return soundFiles
 }
 
+function hasAnySoundFiles(eventFolders: Record<SoundEvent, string>): boolean {
+  return SOUND_EVENTS.some(
+    (eventName) => readSoundFolder(eventFolders[eventName]).length > 0
+  )
+}
+
 function resolveEventSoundSets(
   eventFolders: Record<SoundEvent, string>
 ): Record<SoundEvent, string[]> {
@@ -451,6 +458,13 @@ function commandExists(command: string): boolean {
   return result.status === 0
 }
 
+function ffplayPlayer(): PlayerCommand {
+  return {
+    command: "ffplay",
+    args: ["-loglevel", "quiet", "-nodisp", "-autoexit"],
+  }
+}
+
 function resolvePlayer(config: SfxConfig): ResolvePlayerResult {
   if (config.playerCommand) {
     if (isBareCommand(config.playerCommand) && !commandExists(config.playerCommand)) {
@@ -469,12 +483,28 @@ function resolvePlayer(config: SfxConfig): ResolvePlayerResult {
     }
   }
 
-  if (process.platform === "darwin" && commandExists("afplay")) {
+  if (process.platform === "darwin") {
+    if (commandExists("afplay")) {
+      return {
+        player: {
+          command: "afplay",
+          args: [],
+        },
+        warning: null,
+      }
+    }
+
+    if (commandExists("ffplay")) {
+      return {
+        player: ffplayPlayer(),
+        warning: null,
+      }
+    }
+  }
+
+  if (process.platform === "win32" && commandExists("ffplay")) {
     return {
-      player: {
-        command: "afplay",
-        args: [],
-      },
+      player: ffplayPlayer(),
       warning: null,
     }
   }
@@ -502,10 +532,7 @@ function resolvePlayer(config: SfxConfig): ResolvePlayerResult {
 
     if (commandExists("ffplay")) {
       return {
-        player: {
-          command: "ffplay",
-          args: ["-loglevel", "quiet", "-nodisp", "-autoexit"],
-        },
+        player: ffplayPlayer(),
         warning: null,
       }
     }
@@ -513,7 +540,7 @@ function resolvePlayer(config: SfxConfig): ResolvePlayerResult {
 
   return {
     player: null,
-    warning: `No audio player found. Install afplay (macOS) or paplay/aplay/ffplay (Linux), or set playerCommand in ${CONFIG_PATH}.`,
+    warning: `No audio player found. Install afplay/ffplay (macOS), paplay/aplay/ffplay (Linux), or ffplay (Windows), or set playerCommand in ${CONFIG_PATH}.`,
   }
 }
 
@@ -574,13 +601,18 @@ export const WarcraftSfxPlugin: Plugin = async ({ client }) => {
       return
     }
 
-    const child = spawn(player.command, [...player.args, soundPath], {
+    const playerInvocation = [...player.args, soundPath]
+    const child = spawn(player.command, playerInvocation, {
       stdio: "ignore",
     })
 
     child.on("error", (error) => {
       const message = error instanceof Error ? error.message : "unknown error"
-      void log("error", `Failed to play \"${eventName}\" sound: ${message}`)
+      const commandPreview = [player.command, ...playerInvocation].join(" ")
+      void log(
+        "error",
+        `Failed to play \"${eventName}\" sound with \"${commandPreview}\": ${message}`
+      )
     })
 
     child.unref()
